@@ -1,0 +1,11 @@
+<Project>
+  <PropertyGroup>
+    <!-- Path to the folder CONTAINING Railroader.exe. No trailing slash necessary. -->
+    <GameDir>C:\Program Files (x86)\Steam\steamapps\common\Railroader</GameDir>
+
+    <!-- Optional overrides. Uncomment if needed. -->
+    <!-- <GameManagedDir>D:\Games\Railroader\Railroader_Data\Managed</GameManagedDir> -->
+    <!-- <NativeModDevDir>D:\Documents\Railroader\ModDev\RailroaderModSettings</NativeModDevDir> -->
+    <!-- <HarmonyAssemblyPath>C:\path\to\0Harmony.dll</HarmonyAssemblyPath> -->
+  </PropertyGroup>
+</Project>

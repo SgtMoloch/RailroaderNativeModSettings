@@ -1,0 +1,11 @@
+{
+  "identifier": "sgtmoloch/mod-settings",
+  "version": "__MOD_VERSION__",
+  "name": "Railroader Mod Settings",
+  "author": "Sgt Moloch",
+  "description": "Shared native mod settings with automatic controls in Manage Mods and JSON persistence.",
+  "assemblies": ["__ASSEMBLY_NAME__.dll"],
+  "dependencies": {
+    "required": ["rr/game >=0.6.0"]
+  }
+}

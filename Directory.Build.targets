@@ -1,0 +1,104 @@
+<Project>
+  <PropertyGroup>
+    <!-- One game installation path, shared by every project in the repository. -->
+    <GameManagedDir Condition="'$(GameManagedDir)' == '' AND '$(GameDir)' != ''">$(GameDir)\Railroader_Data\Managed</GameManagedDir>
+
+    <!-- Windows knows where Documents actually is, including OneDrive redirection. -->
+    <NativeDocumentsDir Condition="'$(NativeDocumentsDir)' == ''">$([System.Environment]::GetFolderPath(SpecialFolder.MyDocuments))</NativeDocumentsDir>
+    <NativeModDevDir Condition="'$(NativeModDevDir)' == '' AND '$(NativeDocumentsDir)' != ''">$(NativeDocumentsDir)\Railroader\ModDev\$(AssemblyName)</NativeModDevDir>
+
+    <!-- Keep the old repo/bin publishing convention, not RailroaderModSettings/bin. -->
+    <NativePublishDir>$(MSBuildThisFileDirectory)bin</NativePublishDir>
+    <NativePackDir>$(NativePublishDir)\$(AssemblyName)</NativePackDir>
+    <NativeZipName>$(NativePublishDir)\$(AssemblyName)_$(Version).zip</NativeZipName>
+
+    <!-- Lib.Harmony's restored files, independent of the game installation. -->
+    <HarmonyAssemblyPath Condition="'$(HarmonyAssemblyPath)' == '' AND Exists('$(PkgLib_Harmony)\lib\net472\0Harmony.dll')">$(PkgLib_Harmony)\lib\net472\0Harmony.dll</HarmonyAssemblyPath>
+    <HarmonyAssemblyPath Condition="'$(HarmonyAssemblyPath)' == '' AND Exists('$(PkgLib_Harmony)\lib\net48\0Harmony.dll')">$(PkgLib_Harmony)\lib\net48\0Harmony.dll</HarmonyAssemblyPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Game DLLs are compile-time references only; DO NOT ship them. -->
+    <Reference Include="@(GameAssembly)">
+      <HintPath>$(GameManagedDir)\%(Identity).dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <Target Name="ValidateNativeModBuild" BeforeTargets="ResolveReferences">
+    <Error Condition="'$(GameManagedDir)' == '' OR !Exists('$(GameManagedDir)\Railroader.Modding.dll')"
+           Text="Railroader DLLs not found. Copy Paths.user.example to Paths.user and set GameDir to the folder containing Railroader.exe (or set GameManagedDir)." />
+  </Target>
+
+  <!-- Some NuGet versions only populate PkgLib_Harmony after ResolvePackageAssets.
+       Check the path when the build is done, not at project evaluation. -->
+  <Target Name="ValidateNativeModOutput">
+    <Error Condition="!Exists('$(TargetPath)')" Text="Missing compiled mod DLL: $(TargetPath)" />
+    <Error Condition="'$(HarmonyAssemblyPath)' == '' OR !Exists('$(HarmonyAssemblyPath)')"
+           Text="Cannot find 0Harmony.dll from Lib.Harmony. Restore NuGet packages, or set HarmonyAssemblyPath in Paths.user." />
+  </Target>
+
+  <!-- The checked-in Info.json is a template. Render a real manifest into the
+       build output once, then use that same file for Debug and Release.
+       This also makes bin/Debug/Info.json usable independently of deployment. -->
+  <Target Name="RenderNativeManifest" AfterTargets="Build">
+    <Exec Command="powershell.exe -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildThisFileDirectory)scripts\Render-Manifest.ps1&quot; -Template &quot;$(MSBuildProjectDirectory)\Info.json&quot; -Destination &quot;$(TargetDir)Info.json&quot; -Version &quot;$(Version)&quot; -AssemblyName &quot;$(AssemblyName)&quot;" />
+    <Error Condition="!Exists('$(TargetDir)Info.json')" Text="Generated build manifest is missing." />
+    <Message Importance="high" Text="[$(AssemblyName)] Rendered manifest ($(Version)): $(TargetDir)Info.json" />
+  </Target>
+
+  <Target Name="DeployNativeDebug" AfterTargets="Build"
+          DependsOnTargets="RenderNativeManifest"
+          Condition="'$(Configuration)' == 'Debug' AND '$(PublishMod)' != 'false'">
+    <Error Condition="'$(NativeModDevDir)' == ''"
+           Text="No Documents directory found. Set NativeModDevDir in Paths.user." />
+    <CallTarget Targets="ValidateNativeModOutput" />
+    <Message Importance="high" Text="[$(AssemblyName)] Debug deploy: $(NativeModDevDir)" />
+    <MakeDir Directories="$(NativeModDevDir)" />
+
+    <!-- Copy ALL build output files, including other dependencies/resources. -->
+    <ItemGroup>
+      <NativeDebugFiles Include="$(TargetDir)**\*"
+                        Exclude="$(TargetDir)0Harmony.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(NativeDebugFiles)"
+          DestinationFiles="@(NativeDebugFiles->'$(NativeModDevDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="$(HarmonyAssemblyPath)" DestinationFiles="$(NativeModDevDir)\0Harmony.dll" />
+    <Error Condition="!Exists('$(NativeModDevDir)\Info.json')" Text="Debug manifest was not generated." />
+    <Message Importance="high" Text="[$(AssemblyName)] Debug deploy complete." />
+  </Target>
+
+  
+
+  <Target Name="PackageNativeRelease" AfterTargets="Build"
+          DependsOnTargets="RenderNativeManifest"
+          Condition="'$(Configuration)' == 'Release' AND '$(PublishMod)' != 'false'">
+    <CallTarget Targets="ValidateNativeModOutput" />
+    <Message Importance="high" Text="[$(AssemblyName)] Release staging: $(NativePackDir)" />
+    <MakeDir Directories="$(NativePublishDir)" />
+    <RemoveDir Directories="$(NativePackDir)" />
+    <MakeDir Directories="$(NativePackDir)" />
+
+    <!-- Do not replace this with a hardcoded 2-DLL list. -->
+    <ItemGroup>
+      <NativeReleaseFiles Include="$(TargetDir)**\*"
+                          Exclude="$(TargetDir)0Harmony.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(NativeReleaseFiles)"
+          DestinationFiles="@(NativeReleaseFiles->'$(NativePackDir)\%(RecursiveDir)%(Filename)%(Extension)')" />
+    <Copy SourceFiles="$(HarmonyAssemblyPath)" DestinationFiles="$(NativePackDir)\0Harmony.dll" />
+
+    <Error Condition="!Exists('$(NativePackDir)\$(AssemblyName).dll')" Text="Release staging missing the entry-point DLL." />
+    <Error Condition="!Exists('$(NativePackDir)\0Harmony.dll')" Text="Release staging missing Harmony." />
+    <Error Condition="!Exists('$(NativePackDir)\Info.json')" Text="Release staging missing Info.json." />
+
+    <!-- Create repo/bin/RailroaderModSettings_0.1.0.zip containing RailroaderModSettings/*. -->
+    <ItemGroup>
+      <OldNativeZips Include="$(NativePublishDir)\$(AssemblyName)_*.zip" />
+    </ItemGroup>
+    <Delete Files="@(OldNativeZips)" />
+    <Exec Command="tar.exe -a -c -f &quot;$(NativeZipName)&quot; -C &quot;$(NativePublishDir)&quot; &quot;$(AssemblyName)&quot;" />
+    <Error Condition="!Exists('$(NativeZipName)')" Text="Release ZIP was not created." />
+    <Message Importance="high" Text="[$(AssemblyName)] Release ZIP: $(NativeZipName)" />
+  </Target>
+</Project>

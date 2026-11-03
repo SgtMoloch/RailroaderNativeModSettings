@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>RailroaderModSettings</AssemblyName>
+    <RootNamespace>RailroaderModSettings</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <GameAssembly Include="Railroader.Modding" />
+    <GameAssembly Include="Railroader" />
+    <GameAssembly Include="UnityEngine.CoreModule" />
+    <GameAssembly Include="UnityEngine.TextRenderingModule" />
+    <GameAssembly Include="UnityEngine.UI" />
+    <GameAssembly Include="UnityEngine.UIModule" />
+    <GameAssembly Include="Unity.InputSystem" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- NuGet-managed; 0Harmony.dll ships alongside this mod, never into Managed. -->
+    <PackageReference Include="Lib.Harmony" Version="2.4.3" GeneratePathProperty="true" />
+  </ItemGroup>
+</Project>

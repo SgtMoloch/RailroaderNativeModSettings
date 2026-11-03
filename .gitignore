@@ -1,0 +1,6 @@
+**/Paths.user
+**/bin/*
+**/obj/*
+**/artifacts/*
+**/.vs/*
+**/*.patch

@@ -1,0 +1,29 @@
+<Project>
+  <!-- This lives outside the repository. Copy Paths.user.example to Paths.user first. -->
+  <Import Project="$(MSBuildThisFileDirectory)Paths.user"
+          Condition="Exists('$(MSBuildThisFileDirectory)Paths.user')" />
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>9.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+    <Version>0.2.0</Version>
+    <AssemblyVersion>$(Version)</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <InformationalVersion>$(Version)</InformationalVersion>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <!-- Make the source manifest available as an output file. The deployment
+       target renders the actual version into a separate copy. -->
+  <ItemGroup>
+    <Content Include="Info.json" CopyToOutputDirectory="Always" />
+  </ItemGroup>
+</Project>
