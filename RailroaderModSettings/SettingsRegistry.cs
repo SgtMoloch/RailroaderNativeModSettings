@@ -13,6 +13,12 @@ namespace RailroaderModSettings
             new Dictionary<string, SettingsRegistration>(StringComparer.OrdinalIgnoreCase);
         private static readonly object SyncRoot = new object();
 
+        // A detached, read-only list. A Hub adapter can enumerate registrations safely.
+        public static IReadOnlyList<SettingsRegistration> Registrations => GetAll();
+
+        // Mod list changes only; editing individual settings does not fire this event.
+        public static event Action? RegistrationsChanged;
+
         public static SettingsRegistration Register<T>(
             string modIdentifier,
             string displayName,
@@ -37,7 +43,7 @@ namespace RailroaderModSettings
 
             var registration = new SettingsRegistration(
                 modIdentifier, displayName, typeof(T),
-                changedCallback, onError, root);
+                changedCallback, onError ?? Loader.LogError, root);
 
             lock (SyncRoot)
             {
@@ -45,6 +51,7 @@ namespace RailroaderModSettings
                 Entries[modIdentifier] = registration;
             }
 
+            NotifyRegistrationsChanged();
             return registration;
         }
 
@@ -54,19 +61,24 @@ namespace RailroaderModSettings
             {
                 return;
             }
+            bool removed;
             lock (SyncRoot)
             {
-                Entries.Remove(modIdentifier);
+                removed = Entries.Remove(modIdentifier);
             }
+            if (removed) NotifyRegistrationsChanged();
         }
 
         /// <summary>Clears registrations but leaves saved JSON alone.</summary>
         public static void Clear()
         {
+            bool hadEntries;
             lock (SyncRoot)
             {
+                hadEntries = Entries.Count > 0;
                 Entries.Clear();
             }
+            if (hadEntries) NotifyRegistrationsChanged();
         }
 
         public static SettingsRegistration? Get(string modIdentifier)
@@ -81,7 +93,28 @@ namespace RailroaderModSettings
         {
             lock (SyncRoot)
             {
-                return Entries.Values.OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase).ToArray();
+                return Array.AsReadOnly(Entries.Values
+                    .OrderBy(e => e.DisplayName, StringComparer.OrdinalIgnoreCase)
+                    .ToArray());
+            }
+        }
+
+        private static void NotifyRegistrationsChanged()
+        {
+            Action? listeners = RegistrationsChanged;
+            if (listeners == null) return;
+
+            // An integration callback must not break another mod's load/unload.
+            foreach (Action listener in listeners.GetInvocationList())
+            {
+                try
+                {
+                    listener();
+                }
+                catch (Exception ex)
+                {
+                    Loader.LogError("RegistrationsChanged handler failed: " + ex);
+                }
             }
         }
     }

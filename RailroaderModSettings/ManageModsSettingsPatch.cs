@@ -15,7 +15,7 @@ namespace RailroaderModSettings
 {
     /// <summary>Adds registered settings to Manage Mods.</summary>
     [HarmonyPatch]
-    internal static partial class ManageModsSettingsPatch
+    public static partial class ManageModsSettingsPatch
     {
         private static string? _expandedModIdentifier;
         private static readonly HashSet<string> ExpandedGroups =
@@ -123,9 +123,18 @@ namespace RailroaderModSettings
             bool inGame = false)
         {
             // Host-only settings stay available in Manage Mods, but aren't shown to clients in-game.
-            IEnumerable<SettingField> visibleFields = inGame && !StateManager.IsHost
+            SettingField[] visibleFields = (inGame && !StateManager.IsHost
                 ? registration.Fields.Where(field => !field.Metadata.HostOnly)
-                : registration.Fields;
+                : registration.Fields).ToArray();
+
+            if (visibleFields.Length == 0)
+            {
+                // Don't leave a blank page when every setting is hidden from clients.
+                builder.AddLabel(inGame && !StateManager.IsHost && registration.Fields.Count > 0
+                    ? "Host-only settings. Only the host can change these settings."
+                    : "No settings available.");
+                return;
+            }
 
             RectTransform panel = builder.VStack(settingsBuilder =>
             {
@@ -584,6 +593,7 @@ namespace RailroaderModSettings
 
         private static void ShowError(string message)
         {
+            Loader.LogError(message);
             ModalAlertController.PresentOkay("Mod Settings", message);
         }
 

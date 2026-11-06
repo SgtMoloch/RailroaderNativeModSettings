@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using Game.State;
 using UI.Builder;
 using UI.Windows;
 using UnityEngine;
@@ -19,7 +18,6 @@ namespace RailroaderModSettings
         internal static ModKeyBinding? ToggleKeybinding => _preferences?.ToggleWindow;
         private static readonly UIState<string> Selected = new UIState<string>(null);
         private static GameObject? _hotkeyHost;
-        private static Action<string>? _logWarning;
         // Use pixels from the top. Normalized scroll positions shift as sections grow.
         private static float? _pendingScrollOffset;
         private static string? _displayedMod;
@@ -33,12 +31,11 @@ namespace RailroaderModSettings
             }
         }
 
-        internal static void Start(Action<string> logWarning)
+        internal static void Start()
         {
             Stop();
-            _logWarning = logWarning;
             _preferences = SettingsRegistry.Register<FrameworkPreferences>(
-                FrameworkModId, "Railroader Mod Settings", onError: logWarning)
+                FrameworkModId, "Railroader Mod Settings", onError: Loader.LogError)
                 .GetValues<FrameworkPreferences>();
             _hotkeyHost = new GameObject("RailroaderModSettings.Hotkey");
             UnityEngine.Object.DontDestroyOnLoad(_hotkeyHost);
@@ -57,7 +54,7 @@ namespace RailroaderModSettings
             }
             catch (Exception ex)
             {
-                _logWarning?.Invoke("Failed to close Mod Settings window: " + ex.Message);
+                Loader.LogError("Failed to close Mod settings window: " + ex);
             }
 
             ModKeybindCapture.Cancel(rebuild: false);
@@ -71,7 +68,6 @@ namespace RailroaderModSettings
             Selected.Value = null;
             _preferences = null;
             SettingsRegistry.Unregister(FrameworkModId);
-            _logWarning = null;
         }
 
         internal static void Toggle()
@@ -108,7 +104,7 @@ namespace RailroaderModSettings
             }
             catch (Exception ex)
             {
-                _logWarning?.Invoke("Failed to open Mod Settings window: " + ex);
+                Loader.LogError("Failed to open Mod settings window: " + ex);
             }
         }
 
@@ -122,7 +118,7 @@ namespace RailroaderModSettings
             }
             catch (Exception ex)
             {
-                _logWarning?.Invoke("Failed to rebuild Mod Settings window: " + ex);
+                Loader.LogError("Failed to rebuild Mod settings window: " + ex);
             }
         }
 
@@ -148,10 +144,8 @@ namespace RailroaderModSettings
 
         private static void BuildWindow(UIPanelBuilder builder)
         {
-            List<SettingsRegistration> registrations = SettingsRegistry.GetAll()
-                // Don't show an empty page for mods with only host-only fields.
-                .Where(registration => registration.Fields.Any(field =>
-                    StateManager.IsHost || !field.Metadata.HostOnly))
+            List<SettingsRegistration> registrations = SettingsRegistry.Registrations
+                .Where(registration => registration.Fields.Count > 0)
                 .ToList();
             if (registrations.Count == 0)
             {
@@ -208,16 +202,19 @@ namespace RailroaderModSettings
     }
 
     // Both menus call the same settings renderer.
-    internal static partial class ManageModsSettingsPatch
+    public static partial class ManageModsSettingsPatch
     {
         internal static RectTransform? GetBuilderContainer(UIPanelBuilder builder)
         {
             return BuilderContainerField?.GetValue(builder) as RectTransform;
         }
 
-        internal static void RenderSettingsInGame(
+        // Hosts and clients share the same renderer; host-only filtering happens there.
+        public static void RenderSettingsInGame(
             UIPanelBuilder builder, SettingsRegistration registration, Action rebuild)
         {
+            if (registration == null) throw new ArgumentNullException(nameof(registration));
+            if (rebuild == null) throw new ArgumentNullException(nameof(rebuild));
             RenderSettings(builder, registration, rebuild, inGame: true);
         }
     }
