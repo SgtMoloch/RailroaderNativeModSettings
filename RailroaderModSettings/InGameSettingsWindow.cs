@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Game.State;
 using UI.Builder;
 using UI.Windows;
 using UnityEngine;
@@ -148,11 +149,13 @@ namespace RailroaderModSettings
         private static void BuildWindow(UIPanelBuilder builder)
         {
             List<SettingsRegistration> registrations = SettingsRegistry.GetAll()
-                .Where(registration => registration.Fields.Count > 0)
+                // Don't show an empty page for mods with only host-only fields.
+                .Where(registration => registration.Fields.Any(field =>
+                    StateManager.IsHost || !field.Metadata.HostOnly))
                 .ToList();
             if (registrations.Count == 0)
             {
-                builder.AddLabel("No mods have registered settings yet.");
+                builder.AddLabel("No mod settings are available for this session.");
                 return;
             }
 
@@ -215,7 +218,7 @@ namespace RailroaderModSettings
         internal static void RenderSettingsInGame(
             UIPanelBuilder builder, SettingsRegistration registration, Action rebuild)
         {
-            RenderSettings(builder, registration, rebuild);
+            RenderSettings(builder, registration, rebuild, inGame: true);
         }
     }
 

@@ -20,6 +20,8 @@ namespace RailroaderModSettings
         public string Section { get; set; } = "";
         public string Tooltip { get; set; } = "";
         public int Order { get; set; }
+        // Hide from clients in the in-game window. Manage Mods is unaffected.
+        public bool HostOnly { get; set; } = false;
         public double Min { get; set; } = double.NaN;
         public double Max { get; set; } = double.NaN;
         // -1 = automatic. Otherwise this sets decimals and default slider step.

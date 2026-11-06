@@ -157,14 +157,21 @@ namespace RailroaderModSettings
 
         public void ResetToDefaults()
         {
+            ResetToDefaults(_ => true);
+        }
+
+        public void ResetToDefaults(Func<SettingField, bool> include)
+        {
+            if (include == null) throw new ArgumentNullException(nameof(include));
             object defaults = Activator.CreateInstance(_settingsType)
                 ?? throw new InvalidOperationException("Unable to instantiate settings type: " + _settingsType.FullName);
             // Reset in place, but roll everything back if saving fails.
-            Dictionary<SettingField, object?> oldValues = Fields.ToDictionary(f => f, f => Snapshot(f.GetValue(Values)));
+            SettingField[] fields = Fields.Where(include).ToArray();
+            Dictionary<SettingField, object?> oldValues = fields.ToDictionary(f => f, f => Snapshot(f.GetValue(Values)));
 
             try
             {
-                foreach (SettingField field in Fields)
+                foreach (SettingField field in fields)
                 {
                     UpdateValue(field, field.GetValue(defaults));
                 }
@@ -381,6 +388,10 @@ namespace RailroaderModSettings
                     {
                         throw new InvalidOperationException("[ModKeybind] requires ModKeyBinding: " + member.Name);
                     }
+                    if (setting is ModColorAttribute && valueType != typeof(string))
+                    {
+                        throw new InvalidOperationException("[ModColor] requires a hex string: " + member.Name);
+                    }
                     if (setting.Precision < -1 || setting.Precision > 8)
                     {
                         throw new ArgumentOutOfRangeException(member.Name, "Precision must be between 0 and 8, or -1 for automatic formatting.");
@@ -436,7 +447,22 @@ namespace RailroaderModSettings
                 }
                 else if (type == typeof(string))
                 {
-                    value = Convert.ToString(raw, CultureInfo.InvariantCulture) ?? "";
+                    string text = Convert.ToString(raw, CultureInfo.InvariantCulture) ?? "";
+                    if (field.Metadata is ModColorAttribute)
+                    {
+                        string hex = text.Trim();
+                        if (!hex.StartsWith("#", StringComparison.Ordinal))
+                        {
+                            hex = "#" + hex;
+                        }
+                        // Match the game's hex color picker, but reject invalid hex before saving.
+                        if (!UnityEngine.ColorUtility.TryParseHtmlString(hex, out _))
+                        {
+                            throw new FormatException("Expected a valid hex color (for example #FFAA33).");
+                        }
+                        text = hex;
+                    }
+                    value = text;
                 }
                 else
                 {

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using HarmonyLib;
+using Game.State;
 using UI.Builder;
 using UI.Common;
 using UI.ModSelection;
@@ -118,8 +119,14 @@ namespace RailroaderModSettings
         private static void RenderSettings(
             UIPanelBuilder builder,
             SettingsRegistration registration,
-            Action onRebuild)
+            Action onRebuild,
+            bool inGame = false)
         {
+            // Host-only settings stay available in Manage Mods, but aren't shown to clients in-game.
+            IEnumerable<SettingField> visibleFields = inGame && !StateManager.IsHost
+                ? registration.Fields.Where(field => !field.Metadata.HostOnly)
+                : registration.Fields;
+
             RectTransform panel = builder.VStack(settingsBuilder =>
             {
                 settingsBuilder.ConfigureLayout(8f, 16);
@@ -133,7 +140,15 @@ namespace RailroaderModSettings
                         try
                         {
                             ModKeybindCapture.Cancel(rebuild: false);
-                            registration.ResetToDefaults();
+                            // Don't reset settings that a non-host can't access from this menu.
+                            if (inGame && !StateManager.IsHost)
+                            {
+                                registration.ResetToDefaults(field => !field.Metadata.HostOnly);
+                            }
+                            else
+                            {
+                                registration.ResetToDefaults();
+                            }
                             onRebuild();
                         }
                         catch (Exception ex)
@@ -149,7 +164,7 @@ namespace RailroaderModSettings
                 }
 
                 // One background for both the section header and its expanded fields.
-                foreach (var sectionFields in registration.Fields.GroupBy(
+                foreach (var sectionFields in visibleFields.GroupBy(
                     field => field.Section, StringComparer.Ordinal))
                 {
                     string section = sectionFields.Key;
@@ -351,6 +366,36 @@ namespace RailroaderModSettings
             Action onRebuild)
         {
             Type type = field.ValueType;
+
+            if (field.Metadata is ModColorAttribute)
+            {
+                string currentHex = (string?)field.GetValue(registration.Values) ?? "#FFFFFF";
+                AddSettingRow(builder, field, hBuilder =>
+                {
+                    hBuilder.AddColorDropdown(currentHex,
+                        () => { },
+                        hex =>
+                        {
+                            if (string.IsNullOrWhiteSpace(hex))
+                            {
+                                // The game's Default button passes null.
+                                if (!registration.TryResetFieldToDefault(field.Name, out string? resetError))
+                                {
+                                    ShowError(resetError ?? "Unable to reset " + field.Label + ".");
+                                }
+                                return;
+                            }
+
+                            // Save live changes without destroying the open picker.
+                            if (!registration.TrySet(field.Name, hex, out string? error))
+                            {
+                                ShowError(error ?? "Unable to update " + field.Label + ".");
+                            }
+                        },
+                        _ => onRebuild()).Width(195f);
+                });
+                return;
+            }
 
             if (type == typeof(ModKeyBinding))
             {
